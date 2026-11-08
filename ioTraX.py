@@ -7,6 +7,7 @@ import time
 import threading
 import csv
 import os
+import secrets
 from collections import deque
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -146,8 +147,17 @@ class IOMonitor:
         self.csv_writers = {}
         for disk in self.disks:
             safe_disk = disk.replace('\\', '_').replace('/', '_').replace(':', '')
-            filepath = os.path.join(dir_path, f"{base_name}_{safe_disk}.csv")
-            f = open(filepath, 'w', newline='')
+            # Unpredictable name + exclusive create ('x'): an existing file, symlink
+            # or junction at this path is refused instead of followed or truncated.
+            filepath = os.path.join(dir_path, f"{base_name}_{secrets.token_hex(4)}_{safe_disk}.csv")
+            try:
+                f = open(filepath, 'x', newline='')
+            except Exception:
+                for opened in self.log_files.values():
+                    opened.close()
+                self.log_files = {}
+                self.csv_writers = {}
+                raise
             writer = csv.writer(f)
             writer.writerow(['Timestamp', 'Read MB/s', 'Write MB/s', 'Read Latency ms', 'Write Latency ms', 'Read Size KB', 'Write Size KB', 'IOPS'])
             self.log_files[disk] = f
